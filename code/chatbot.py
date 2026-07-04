@@ -31,9 +31,10 @@ def stage_5_chatbot(mode="cli"):
         q = parse_query(question, tickers, name_map, latest_date,
                         default_model)
         if q["ticker"] is None:
-            return ("Which stock do you mean? Try a ticker like AAPL or a "
-                    "company name like Apple. Example: 'Will Apple go up "
-                    "tomorrow?'")
+            return ("Sorry, that stock isn't in my dataset (S&P 500 "
+                    "companies, 2010-2016 — no TSLA or AMZN, for example), "
+                    "or the question needs a ticker. Try: 'Will Apple go "
+                    "up tomorrow?' or 'predict JPM on 2016-06-24'")
         pred = predict_one(q["ticker"], q["date"], q["model"],
                            seq_pred, rf_pred, data)
         return format_answer(pred)

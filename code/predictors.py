@@ -1,5 +1,7 @@
 """loading saved models and producing predictions with explanations"""
 
+import warnings
+warnings.filterwarnings("ignore", message="X does not have valid feature names")
 import os
 import pickle
 import numpy as np
