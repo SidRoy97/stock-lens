@@ -10,3 +10,8 @@ __pycache__/
 code/.gradio/
 data/
 models/
+
+.DS_Store
+code/.gradio/
+data/
+models/
