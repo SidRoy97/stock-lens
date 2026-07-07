@@ -579,3 +579,13 @@ random forest loaded: True
 
 chat ready — ask naturally, e.g. 'Will Apple go up tomorrow?'
 type 'quit' to exit
+
+======================================================================
+STAGE 5 — CHATBOT (natural language)
+======================================================================
+sequence model loaded: True
+random forest loaded: True
+
+chat ready — ask naturally, e.g. 'Which sector should I buy into?' or 'Why is XOM predicted up?'
+type 'quit' to exit
+chat session ended
