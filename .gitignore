@@ -1,5 +1,4 @@
 data/
-models/
 outputs/
 __pycache__/
 .ipynb_checkpoints/
@@ -9,9 +8,9 @@ __pycache__/
 .DS_Store
 code/.gradio/
 data/
-models/
 
 .DS_Store
 code/.gradio/
 data/
-models/
+models/shadow/
+models/archive/
