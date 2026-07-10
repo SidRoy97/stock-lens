@@ -245,7 +245,7 @@ def stage_5_chatbot(mode="cli"):
             from gradio_ui import build_interface
             demo = build_interface(answer)
             log("launching gradio...")
-            demo.launch(share=True)
+            demo.launch(share=True, **getattr(demo, "_launch_extras", {}))
             return
         except ImportError:
             log("gradio missing — falling back to CLI")
