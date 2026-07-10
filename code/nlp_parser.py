@@ -9,6 +9,7 @@ SECTOR_SYNONYMS = {
     "tech": "Information Technology",
     "technology": "Information Technology",
     "it sector": "Information Technology",
+    "information technology": "Information Technology",
     "energy": "Energy",
     "oil": "Energy",
     "financial": "Financials",
@@ -20,6 +21,7 @@ SECTOR_SYNONYMS = {
     "health care": "Health Care",
     "pharma": "Health Care",
     "utilities": "Utilities",
+    "utility": "Utilities",
     "industrial": "Industrials",
     "industrials": "Industrials",
     "materials": "Materials",
@@ -29,6 +31,9 @@ SECTOR_SYNONYMS = {
     "consumer staples": "Consumer Staples",
     "staples": "Consumer Staples",
 }
+
+# words that signal an explicit sector question, used to force sector intent
+SECTOR_CUES = ("sector", "sectors", "industry", "industries")
 
 
 def load_ticker_names():
@@ -52,7 +57,7 @@ def load_sector_map():
     sec = pd.read_csv(os.path.join(DATA_PATH, "securities.csv"))
     sector_map = dict(zip(sec["Ticker symbol"].str.upper(),
                           sec["GICS Sector"]))
-    return sector_map, set(sec["GICS Sector"].unique())
+    return sector_map, set(sec["GICS Sector"].dropna().unique())
 
 
 def parse_date(text, latest_date):
@@ -87,16 +92,22 @@ def parse_model(text):
     return None
 
 
-def parse_ticker(text, tickers, name_map):
-    # finding a ticker symbol or company name anywhere in the question
+def parse_ticker(text, tickers, name_map, sector_context=False):
+    # finding a ticker symbol or company name in the question; when the
+    # question is clearly about a sector i stay silent so a stale company
+    # name cannot masquerade as a ticker prediction
     stopwords = {"I", "A", "UP", "DOWN", "ON", "IN", "AT", "TO", "IS", "IT",
                  "GO", "DO", "BE", "OR", "SO", "USE", "THE", "CNN", "RF"}
     for token in re.findall(r"\b[A-Z][A-Z0-9.\-]{0,5}\b", text):
         if token in tickers and token not in stopwords:
             return token
+    if sector_context:
+        # an explicit sector question: do not fall through to fuzzy names
+        return None
     lowered = text.lower()
     # preferring the longest matching company name to avoid generic collisions
-    matches = [(name, tk) for name, tk in name_map.items() if name in lowered]
+    matches = [(name, tk) for name, tk in name_map.items()
+               if re.search(r"\b" + re.escape(name) + r"\b", lowered)]
     if matches:
         return max(matches, key=lambda m: len(m[0]))[1]
     return None
@@ -106,11 +117,12 @@ def parse_sector(text, valid_sectors):
     # matching sector synonyms, preferring the longest phrase found
     lowered = text.lower()
     hits = [(syn, canon) for syn, canon in SECTOR_SYNONYMS.items()
-            if syn in lowered and canon in valid_sectors]
+            if re.search(r"\b" + re.escape(syn) + r"\b", lowered)
+            and canon in valid_sectors]
     if hits:
         return max(hits, key=lambda h: len(h[0]))[1]
     for canon in valid_sectors:
-        if str(canon).lower() in lowered:
+        if re.search(r"\b" + re.escape(str(canon).lower()) + r"\b", lowered):
             return canon
     return None
 
@@ -128,6 +140,15 @@ def parse_live(text):
     return bool(m and int(m.group(1)) >= 2017)
 
 
+def parse_top_n(text):
+    # reading a requested count like 'top 5 stocks' or 'best 3 sectors'
+    m = re.search(r"\b(?:top|best|highest)\s+(\d{1,2})\b", text.lower())
+    if m:
+        n = int(m.group(1))
+        return n if 1 <= n <= 50 else None
+    return None
+
+
 def parse_horizon(text):
     # reading a multi-day horizon like 'next 5 days' or 'next week'
     lowered = text.lower()
@@ -141,9 +162,26 @@ def parse_horizon(text):
     return None
 
 
-def detect_intent(text, ticker, sector):
-    # classifying the question so the chatbot can route it properly
+def _has_sector_cue(text):
+    # detecting an explicit sector or industry question
     lowered = text.lower()
+    return any(re.search(r"\b" + c + r"\b", lowered) for c in SECTOR_CUES)
+
+
+def detect_intent(text, ticker, sector, sector_cue=False):
+    # classifying the question so the chatbot can route it properly;
+    # explicit sector questions win over ticker prediction so a stale
+    # company-name match can never hijack a sector assessment
+    lowered = text.lower()
+
+    # sector questions first, guarded by an explicit sector/industry cue
+    if re.search(r"(which|what|top|best|rank)\s+(\d+\s+)?sector", lowered) or \
+            (sector_cue and re.search(r"(which|what|best|top|rank)", lowered)
+             and sector is None):
+        return "sector_rank"
+    if sector is not None and (sector_cue or ticker is None):
+        return "sector_check"
+
     if any(w in lowered for w in ("confidence", "how sure", "how certain",
                                   "certainty")):
         return "confidence"
@@ -153,10 +191,6 @@ def detect_intent(text, ticker, sector):
     if re.search(r"(which|what|top|best)\s+(\d+\s+)?stocks", lowered) or \
             ("highest" in lowered and "stock" in lowered):
         return "top_movers"
-    if re.search(r"(which|what)\s+sector", lowered):
-        return "sector_rank"
-    if sector is not None and ticker is None:
-        return "sector_check"
     if "should i" in lowered or re.search(r"\b(sell or hold|buy or sell|"
                                           r"hold or sell)\b", lowered):
         return "advise"
@@ -177,15 +211,20 @@ def parse_unknown_ticker(text):
 def parse_query(text, tickers, name_map, latest_date, default_model,
                 valid_sectors=None):
     # combining all extractors into one structured query dict
-    ticker = parse_ticker(text, tickers, name_map)
+    sector_cue = _has_sector_cue(text)
     sector = parse_sector(text, valid_sectors or set())
+    # in an explicit sector question i refuse fuzzy company-name matching
+    ticker = parse_ticker(text, tickers, name_map,
+                          sector_context=sector_cue and sector is not None)
     live = parse_live(text)
-    if live and ticker is None:
+    if live and ticker is None and not sector_cue:
         ticker = parse_unknown_ticker(text)
     return {"ticker": ticker,
             "sector": sector,
+            "sector_cue": sector_cue,
             "live": live,
             "date": parse_date(text, latest_date),
             "model": parse_model(text) or default_model,
             "horizon_days": parse_horizon(text),
-            "intent": detect_intent(text, ticker, sector)}
+            "top_n": parse_top_n(text),
+            "intent": detect_intent(text, ticker, sector, sector_cue)}

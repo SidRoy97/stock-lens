@@ -39,8 +39,15 @@ def stage_5_chatbot(mode="cli"):
         if rf_pred is None:
             return None
         latest = data[data["date"] == latest_date].drop_duplicates("symbol")
+        # dropping rows the model cannot score cleanly so every downstream
+        # ranking has complete, honest data instead of a silently short list
+        feat = rf_pred["feature_cols"]
+        latest = latest.dropna(subset=feat)
+        if latest.empty:
+            cache["scores"] = None
+            return None
         X = rf_pred["scaler"].transform(
-            rf_pred["imputer"].transform(latest[rf_pred["feature_cols"]]))
+            rf_pred["imputer"].transform(latest[feat]))
         probs = rf_pred["model"].predict_proba(X)
         classes = list(rf_pred["label_encoder"].classes_)
         out = pd.DataFrame({
@@ -57,9 +64,15 @@ def stage_5_chatbot(mode="cli"):
         scores = latest_scores()
         if scores is None:
             return None
-        return scores.dropna(subset=["sector"]).groupby("sector") \
+        table = scores.dropna(subset=["sector"]).groupby("sector") \
             .agg(net=("net", "mean"), p_up=("p_up", "mean"),
                  n=("ticker", "count")).sort_values("net", ascending=False)
+        if table.empty:
+            return None
+        # counts are whole stocks — keep them integer so they never render
+        # as 1.0 / 3.0 after any float-introducing aggregation upstream
+        table["n"] = table["n"].astype(int)
+        return table
 
     def get_pred(q):
         # choosing live yfinance data or the 2010-2016 dataset per the query
@@ -150,23 +163,35 @@ def stage_5_chatbot(mode="cli"):
         scores = latest_scores()
         if scores is None:
             return "Ranking needs the random forest model loaded."
-        top = scores.sort_values("p_up", ascending=False).head(5)
+        want = q.get("top_n") or 5
+        ranked = scores.sort_values("p_up", ascending=False)
+        top = ranked.head(want)
         lines = [f"  {i + 1}. {r.ticker} ({r.sector}) — P(>1% gain "
                  f"tomorrow) = {r.p_up:.0%}"
                  for i, r in enumerate(top.itertuples())]
-        return (f"Highest model-estimated probabilities of an Up day "
+        note = ""
+        if len(top) < want:
+            note = (f"\n(Only {len(top)} stocks had complete data to score "
+                    f"today, so I'm showing those.)")
+        return (f"Top {len(top)} by model-estimated probability of an Up day "
                 f"(defined as a >1% gain) after {latest_date.date()}:\n"
-                + "\n".join(lines) + DISCLAIMER)
+                + "\n".join(lines) + note + DISCLAIMER)
 
     def answer_sector_rank(q):
         table = sector_table()
         if table is None:
             return "Sector ranking needs the random forest model loaded."
+        want = q.get("top_n") or 3
+        shown = table.head(want)
         lines = [f"  {i + 1}. {name} — avg P(Up) {row.p_up:.0%}, net "
-                 f"optimism {row.net:+.2f} across {row.n} stocks"
-                 for i, (name, row) in enumerate(table.head(3).iterrows())]
-        return (f"Sectors ranked by the model's average next-day optimism "
-                f"as of {latest_date.date()}:\n" + "\n".join(lines)
+                 f"optimism {row.net:+.2f} across {int(row.n)} stocks"
+                 for i, (name, row) in enumerate(shown.iterrows())]
+        note = ""
+        if len(shown) < want:
+            note = f"\n(Only {len(table)} sectors were scoreable today.)"
+        return (f"Top {len(shown)} sectors by the model's average next-day "
+                f"optimism as of {latest_date.date()}:\n" + "\n".join(lines)
+                + note
                 + f"\n\nNote the model's horizon is one day, so 'next week' "
                   f"is an extrapolation." + DISCLAIMER)
 
