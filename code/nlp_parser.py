@@ -174,7 +174,18 @@ def detect_intent(text, ticker, sector, sector_cue=False):
     # company-name match can never hijack a sector assessment
     lowered = text.lower()
 
-    # sector questions first, guarded by an explicit sector/industry cue
+    # confidence and explanation questions are about a specific ticker and
+    # must win before any sector or generic routing can intercept them
+    if ticker is not None and any(
+            w in lowered for w in ("confidence", "how sure", "how certain",
+                                   "certainty", "how confident")):
+        return "confidence"
+    if ticker is not None and any(
+            w in lowered for w in ("why", "causing", "features", "reasons",
+                                   "driving", "explain", "because of what")):
+        return "explain"
+
+    # sector questions next, guarded by an explicit sector/industry cue
     if re.search(r"(which|what|top|best|rank)\s+(\d+\s+)?sector", lowered) or \
             (sector_cue and re.search(r"(which|what|best|top|rank)", lowered)
              and sector is None):
@@ -182,8 +193,10 @@ def detect_intent(text, ticker, sector, sector_cue=False):
     if sector is not None and (sector_cue or ticker is None):
         return "sector_check"
 
+    # confidence/explain without a resolved ticker still classify so the
+    # router can ask for a valid ticker rather than silently predicting
     if any(w in lowered for w in ("confidence", "how sure", "how certain",
-                                  "certainty")):
+                                  "certainty", "how confident")):
         return "confidence"
     if any(w in lowered for w in ("why", "causing", "features", "reasons",
                                   "driving", "explain", "because of what")):
@@ -215,7 +228,7 @@ def parse_query(text, tickers, name_map, latest_date, default_model,
     sector = parse_sector(text, valid_sectors or set())
     # in an explicit sector question i refuse fuzzy company-name matching
     ticker = parse_ticker(text, tickers, name_map,
-                          sector_context=sector_cue and sector is not None)
+                          sector_context=sector_cue)
     live = parse_live(text)
     if live and ticker is None and not sector_cue:
         ticker = parse_unknown_ticker(text)
