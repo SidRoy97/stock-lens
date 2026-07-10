@@ -239,23 +239,11 @@ def stage_5_chatbot(mode="cli"):
                     "ticker, e.g. 'Will TSLA go up tomorrow? live'")
         return handlers[q["intent"]](q)
 
-    # launching the gradio web interface when requested
+    # launching the polished gradio web interface when requested
     if mode in ("gradio", "both"):
         try:
-            import gradio as gr
-            demo = gr.Interface(
-                fn=answer,
-                inputs=gr.Textbox(
-                    label="Ask me anything about a stock",
-                    placeholder="Should I sell or hold my Apple stock? "
-                                "Which sector looks best? Why is MSFT "
-                                "predicted up?"),
-                outputs=gr.Textbox(label="Answer", lines=10),
-                title="stock-lens",
-                description="Ask in plain English: predictions, confidence, "
-                            "feature explanations, sector rankings, or top "
-                            "stocks. Data covers 2010-2016; 'today' means "
-                            "the latest day in the dataset.")
+            from gradio_ui import build_interface
+            demo = build_interface(answer)
             log("launching gradio...")
             demo.launch(share=True)
             return
