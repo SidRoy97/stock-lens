@@ -715,3 +715,11 @@ note: scoring 2016-12-29 — the last full trading day (501 tickers); later date
 
 chat ready — ask naturally, e.g. 'Which sector should I buy into?' or 'Why is XOM predicted up?'
 type 'quit' to exit
+
+======================================================================
+STAGE 5 — CHATBOT (natural language)
+======================================================================
+sequence model loaded: True
+random forest loaded: True
+note: scoring 2016-12-29 — the last full trading day (501 tickers); later dates have only a handful of tickers in the source data
+launching gradio...
