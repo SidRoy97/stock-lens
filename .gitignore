@@ -2,7 +2,6 @@ data/
 outputs/
 __pycache__/
 .ipynb_checkpoints/
-*.pkl
 *.h5
 .env
 .DS_Store
@@ -14,3 +13,5 @@ code/.gradio/
 data/
 models/shadow/
 models/archive/
+.gradio/
+flagged/

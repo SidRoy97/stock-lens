@@ -589,3 +589,129 @@ random forest loaded: True
 chat ready — ask naturally, e.g. 'Which sector should I buy into?' or 'Why is XOM predicted up?'
 type 'quit' to exit
 chat session ended
+
+======================================================================
+STAGE 5 — CHATBOT (natural language)
+======================================================================
+sequence model loaded: True
+random forest loaded: True
+
+======================================================================
+STAGE 5 — CHATBOT (natural language)
+======================================================================
+sequence model loaded: True
+random forest loaded: True
+
+======================================================================
+STAGE 5 — CHATBOT (natural language)
+======================================================================
+sequence model loaded: True
+random forest loaded: True
+launching gradio...
+
+======================================================================
+STAGE 5 — CHATBOT (natural language)
+======================================================================
+sequence model loaded: True
+random forest loaded: True
+launching gradio...
+
+======================================================================
+STAGE 5 — CHATBOT (natural language)
+======================================================================
+sequence model loaded: True
+random forest loaded: True
+launching gradio...
+
+======================================================================
+STAGE 5 — CHATBOT (natural language)
+======================================================================
+sequence model loaded: True
+random forest loaded: True
+launching gradio...
+
+======================================================================
+STAGE 5 — CHATBOT (natural language)
+======================================================================
+sequence model loaded: True
+random forest loaded: True
+launching gradio...
+
+======================================================================
+STAGE 2B — ENHANCED FEATURES + MULTI-HORIZON LABELS
+======================================================================
+adding lagged features...
+adding return features...
+adding multi-horizon labels...
+  [plot saved] s2b_horizon_label_distributions.png
+dropped 5,010 rows with nulls in features
+  rows with label_1d: 821,711 (0 lack it — kept for scoring)
+  rows with label_5d: 821,711 (0 lack it — kept for scoring)
+  rows with label_10d: 821,711 (0 lack it — kept for scoring)
+last date 2016-12-30 has 4 tickers (was collapsing to a handful before this fix)
+enhanced master shape: (821711, 66)
+stage 2b complete
+
+======================================================================
+STAGE 3 — BASELINE CLASSIFICATION (POOLED, NEXT-DAY)
+======================================================================
+training random forest...
+random forest — validation:
+              precision    recall  f1-score   support
+
+        Down       0.26      0.13      0.17     27715
+     Neutral       0.62      0.68      0.65     69393
+          Up       0.28      0.36      0.32     27417
+
+    accuracy                           0.49    124525
+   macro avg       0.39      0.39      0.38    124525
+weighted avg       0.47      0.49      0.47    124525
+
+training xgboost...
+xgboost — validation:
+              precision    recall  f1-score   support
+
+        Down       0.27      0.18      0.21     27715
+     Neutral       0.63      0.65      0.64     69393
+          Up       0.28      0.36      0.32     27417
+
+    accuracy                           0.48    124525
+   macro avg       0.39      0.40      0.39    124525
+weighted avg       0.47      0.48      0.47    124525
+
+  [plot saved] s3_rf_confusion_val.png
+  [plot saved] s3_xgb_confusion_val.png
+  [plot saved] s3_rf_feature_importance.png
+best baseline model: xgb
+xgb — TEST:
+              precision    recall  f1-score   support
+
+        Down       0.25      0.21      0.23     25058
+     Neutral       0.66      0.64      0.65     72746
+          Up       0.29      0.37      0.33     28710
+
+    accuracy                           0.49    126514
+   macro avg       0.40      0.41      0.40    126514
+weighted avg       0.50      0.49      0.49    126514
+
+saved baseline models
+stage 3 complete
+
+======================================================================
+STAGE 5 — CHATBOT (natural language)
+======================================================================
+sequence model loaded: True
+random forest loaded: True
+
+chat ready — ask naturally, e.g. 'Which sector should I buy into?' or 'Why is XOM predicted up?'
+type 'quit' to exit
+
+======================================================================
+STAGE 5 — CHATBOT (natural language)
+======================================================================
+sequence model loaded: True
+random forest loaded: True
+note: scoring 2016-12-29 — the last full trading day (501 tickers); later dates have only a handful of tickers in the source data
+
+chat ready — ask naturally, e.g. 'Which sector should I buy into?' or 'Why is XOM predicted up?'
+type 'quit' to exit
