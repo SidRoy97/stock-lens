@@ -193,6 +193,9 @@ def detect_intent(text, ticker, sector, sector_cue=False):
     if sector is not None and (sector_cue or ticker is None):
         return "sector_check"
 
+    if any(w in lowered for w in ("news", "headline", "headlines")):
+        return "news"
+
     # confidence/explain without a resolved ticker still classify so the
     # router can ask for a valid ticker rather than silently predicting
     if any(w in lowered for w in ("confidence", "how sure", "how certain",

@@ -68,6 +68,9 @@ pred_mod.predict_one = lambda t, d, m, s, r, data: {
 pred_mod.format_answer = lambda p: (f"{p['ticker']}: {p['prediction']} "
     f"{p['confidence']:.0%}" if "error" not in p else p["error"])
 sys.modules["predictors"] = pred_mod
+yn = types.ModuleType("yahoo_news")
+yn.news_block = lambda t: f"Recent Yahoo Finance headlines for {t.upper()}:\n  - stub"
+sys.modules["yahoo_news"] = yn
 lf = types.ModuleType("live_features")
 lf.predict_live = lambda *a, **k: {"error": "live disabled in test"}
 sys.modules["live_features"] = lf
@@ -105,6 +108,9 @@ QUESTIONS = [
     ("how is the financial sector doing", ["sector_check", "Financials"]),
     ("how are healthcare stocks looking", ["sector_check", "Health Care"]),
     ("which sector looks best right about this time", ["sector_rank"]),
+    ("what's the latest news on Apple", ["news", "AAPL"]),
+    ("show me headlines for MSFT", ["news", "MSFT"]),
+    ("why is XOM predicted up", ["explain", "XOM"]),
 ]
 
 captured = []

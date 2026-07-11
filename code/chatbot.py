@@ -28,7 +28,16 @@ def stage_5_chatbot(mode="cli"):
                        parse_dates=["date"])
     tickers, name_map = load_ticker_names()
     sector_map, valid_sectors = load_sector_map()
-    latest_date = data["date"].max()
+    # using the last trading day that has a full universe, not the literal
+    # max date — this dataset ends with a few tickers (HBI, CERN, SWK, SNA)
+    # extending past the rest, so max() would score only those 4 names
+    _counts = data.groupby("date")["symbol"].nunique()
+    _full = _counts[_counts >= _counts.max() * 0.9]
+    latest_date = _full.index.max() if len(_full) else data["date"].max()
+    if latest_date != data["date"].max():
+        log(f"note: scoring {latest_date.date()} — the last full trading "
+            f"day ({int(_counts.loc[latest_date])} tickers); later dates "
+            f"have only a handful of tickers in the source data")
     default_model = "sequence" if seq_pred is not None else "random_forest"
     cache = {}
 
@@ -159,6 +168,10 @@ def stage_5_chatbot(mode="cli"):
                 f"influential features and this stock's current readings:\n"
                 + "\n".join(lines) + note + DISCLAIMER)
 
+    def answer_news(q):
+        from yahoo_news import news_block
+        return news_block(q["ticker"]) + DISCLAIMER
+
     def answer_top_movers(q):
         scores = latest_scores()
         if scores is None:
@@ -212,6 +225,7 @@ def stage_5_chatbot(mode="cli"):
 
     handlers = {"predict": answer_predict, "confidence": answer_confidence,
                 "advise": answer_advise, "explain": answer_explain,
+                "news": answer_news,
                 "top_movers": answer_top_movers,
                 "sector_rank": answer_sector_rank,
                 "sector_check": answer_sector_check}
@@ -224,7 +238,7 @@ def stage_5_chatbot(mode="cli"):
                 and q["ticker"]:
             return answer_horizon(q)
         needs_ticker = q["intent"] in ("predict", "confidence", "advise",
-                                       "explain")
+                                       "explain", "news")
         if q.get("live") and q["intent"] in ("top_movers",
                                              "sector_rank", "sector_check"):
             return ("Live mode currently supports single-ticker questions; "

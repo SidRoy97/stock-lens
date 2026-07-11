@@ -11,6 +11,11 @@ def prep_xy(train, val, test, feature_cols, label_col):
     # imputing, scaling, and encoding using training statistics only
     from sklearn.impute import SimpleImputer
     from sklearn.preprocessing import StandardScaler, LabelEncoder
+    # dropping rows with no label for THIS horizon — recent rows legitimately
+    # lack forward labels and must not become a phantom class
+    train = train[train[label_col].notna()]
+    val = val[val[label_col].notna()]
+    test = test[test[label_col].notna()]
     imp = SimpleImputer(strategy="median")
     Xtr = imp.fit_transform(train[feature_cols])
     Xva = imp.transform(val[feature_cols])
@@ -27,6 +32,7 @@ def prep_xy(train, val, test, feature_cols, label_col):
 
 
 def final_test_eval(df, feature_cols, label_col, build_model, use_weight, tag):
+    df = df[df[label_col].notna()]
     # refitting the chosen model on train+val and scoring the test set once
     from sklearn.impute import SimpleImputer
     from sklearn.preprocessing import StandardScaler, LabelEncoder
