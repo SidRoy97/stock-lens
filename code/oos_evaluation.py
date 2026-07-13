@@ -11,7 +11,8 @@ from helpers import log, save_plot, section
 from features import add_indicators
 from enhanced_features import add_lags, add_returns
 from predictors import load_seq_predictor, load_rf_predictor
-
+from baseline_addition import compute_year_baselines
+from bootstrap_ci_addition import bootstrap_year_f1
 
 def prepare_oos_frame(limit=None):
     # downloading yfinance data and rebuilding the training feature pipeline
@@ -29,13 +30,24 @@ def prepare_oos_frame(limit=None):
     raw = yf.download(list(yf_map.values()), start=OOS_START, end=OOS_END,
                       group_by="ticker", auto_adjust=True, progress=False,
                       threads=True)
+    # yf.download drops the ticker level of the column MultiIndex when only
+    # one symbol is requested, so raw[yft] would raise a KeyError in that
+    # case — detecting it up front lets a single-ticker debug run
+    # (STOCK_LENS_OOS_TICKERS=1) work the same way as a full run
+    single_ticker = not isinstance(raw.columns, pd.MultiIndex)
+ 
     frames = []
+    failed = []
+    too_short = []
     for orig, yft in yf_map.items():
         try:
-            sub = raw[yft].dropna(subset=["Close"]).reset_index()
-        except Exception:
+            sub = raw if single_ticker else raw[yft]
+            sub = sub.dropna(subset=["Close"]).reset_index()
+        except Exception as e:
+            failed.append((orig, str(e)))
             continue
         if len(sub) < 100:
+            too_short.append((orig, len(sub)))
             continue
         sub = sub.rename(columns={"Date": "date", "Open": "open",
                                   "High": "high", "Low": "low",
@@ -43,6 +55,34 @@ def prepare_oos_frame(limit=None):
         sub["symbol"] = orig
         frames.append(sub[["date", "symbol", "open", "high", "low",
                            "close", "volume"]])
+        
+    # reporting survivorship explicitly — this is exactly the number you
+    # need to caveat when comparing OOS results against the full universe
+    n_requested = len(tickers)
+    n_kept = len(frames)
+    log(f"ticker coverage: {n_kept}/{n_requested} kept "
+        f"({len(failed)} failed to download, "
+        f"{len(too_short)} had <100 rows)")
+    if failed:
+        preview = ", ".join(t for t, _ in failed[:15])
+        more = f" (+{len(failed) - 15} more)" if len(failed) > 15 else ""
+        log(f"  failed tickers: {preview}{more}")
+    if too_short:
+        preview = ", ".join(f"{t}({n})" for t, n in too_short[:15])
+        more = f" (+{len(too_short) - 15} more)" if len(too_short) > 15 else ""
+        log(f"  too-short tickers: {preview}{more}")
+ 
+    # saving the full coverage detail to disk so it can be cited in
+    # writeups without having to re-run the download
+    coverage = pd.DataFrame(
+        [{"symbol": t, "status": "kept"} for t in yf_map
+         if t not in dict(failed) and t not in dict(too_short)] +
+        [{"symbol": t, "status": f"failed: {e}"} for t, e in failed] +
+        [{"symbol": t, "status": f"too_short: {n} rows"}
+         for t, n in too_short])
+    coverage.to_csv(os.path.join(OBS_PATH, "s6_ticker_coverage.csv"),
+                    index=False)
+    
     if not frames:
         return None
     df = pd.concat(frames, ignore_index=True)
@@ -108,6 +148,8 @@ def stage_6_oos():
                          "macro_f1": f1_score(grp["true_label"],
                                               grp["rf_pred"],
                                               average="macro")})
+        rf_ci = bootstrap_year_f1(df["true_label"], df["rf_pred"],
+                                  df["year"], "random_forest")
         log(f"\nrf OOS overall macro_f1 = "
             f"{f1_score(df['true_label'], df['rf_pred'], average='macro'):.4f}")
         log(classification_report(df["true_label"], df["rf_pred"]))
@@ -142,6 +184,7 @@ def stage_6_oos():
                 out = seq_pred["model"](torch.tensor(Xs[i:i + 4096])).numpy()
                 preds.append(out.argmax(axis=1))
         preds = np.concatenate(preds)
+        seq_ci = bootstrap_year_f1(ys, preds, yrs, f"sequence_{meta['kind']}")
         for yr in sorted(set(yrs)):
             m = yrs == yr
             rows.append({"model": f"sequence_{meta['kind']}", "year": int(yr),
@@ -153,13 +196,19 @@ def stage_6_oos():
                                   target_names=["Down", "Neutral", "Up"]))
 
     # saving the per-year regime table and plot
-    res = pd.DataFrame(rows)
+    baseline_res = compute_year_baselines(df)
+    model_res = pd.DataFrame(rows)
+    ci_res = pd.concat([rf_ci, seq_ci], ignore_index=True) if rf_pred is not None and seq_pred is not None else (rf_ci if rf_pred is not None else seq_ci)
+    model_res = model_res.merge(ci_res[["model", "year", "ci_lo", "ci_hi"]],
+                                on=["model", "year"], how="left")
+    res = pd.concat([model_res, baseline_res], ignore_index=True)
     res.to_csv(os.path.join(OBS_PATH, "s6_oos_results.csv"), index=False)
     log("\nOOS RESULTS BY YEAR:\n" + res.to_string(index=False))
+    sns.set_style("whitegrid")
     plt.figure(figsize=(12, 5))
-    sns.lineplot(data=res, x="year", y="macro_f1", hue="model", marker="o")
-    plt.axhline(0.333, color="red", linestyle="--")
-    plt.title("out-of-sample macro F1 by year")
+    ax = sns.lineplot(data=res, x="year", y="macro_f1", hue="model", marker="o")
+    ax.set_axisbelow(True)
+    plt.title("out-of-sample macro F1 by year (vs. chance baselines)")
     save_plot("s6_oos_macro_f1_by_year.png")
     log("stage 6 complete")
     return res
