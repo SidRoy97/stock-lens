@@ -275,10 +275,15 @@ def stage_4_sequence():
     plt.title("pooled sequence models — VAL macro F1")
     plt.legend()
     save_plot("s4_pooled_sequence_macro_f1.png")
+
+    # granularity comparison — classification head only, so pooled vs
+    # per-stock bars are apples-to-apples with Table II / the Results text
     plt.figure(figsize=(11, 5))
-    sns.barplot(data=res[res["split"] == "val"], x="architecture",
-                y="macro_f1", hue="granularity")
-    plt.title("sequence models — pooled vs per-stock")
+    res_cls_val = res[(res["head"] == "classification") & (res["split"] == "val")]
+    sns.barplot(data=res_cls_val, x="architecture", y="macro_f1", hue="granularity")
+    plt.axhline(0.39, color="green", linestyle="--", label="best tabular")
+    plt.legend()
+    plt.title("sequence models — pooled vs per-stock (classification head)")
     save_plot("s4_granularity_comparison.png")
     log("stage 4 complete")
     return res
